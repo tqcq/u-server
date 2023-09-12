@@ -19,7 +19,8 @@ public:
 
         HTTPServer(IPAddress listen_addr, int listen_port)
             : listen_addr_(listen_addr),
-              listen_port_(listen_port)
+              listen_port_(listen_port),
+              client_count_(0)
         {}
 
         bool Initialize()
@@ -38,8 +39,8 @@ public:
                         return false;
                 }
 
-                accept_socket->SignalConnectEvent.connect(
-                        this, &HTTPServer::OnAccept);
+                accept_socket->SignalReadEvent.connect(this,
+                                                       &HTTPServer::OnAccept);
                 return true;
         }
 
@@ -51,11 +52,21 @@ protected:
                 for (int i = 0; i < kMaxAcceptPerCall; ++i) {
                         Socket *client_socket = accept_socket->Accept(nullptr);
                         if (!client_socket) {
-                                continue;
+                                if (accept_socket->GetError() == EINTR) {
+                                        continue;
+                                }
+                                break;
                         }
 
+                        client_count_++;
                         client_socket->SignalReadEvent.connect(
                                 this, &HTTPServer::OnRead);
+
+                        client_socket->SignalCloseEvent.connect(
+                                this, &HTTPServer::OnClose);
+                        if (client_count_ % 1000 == 0) {
+                                U_INFO("Client connected: {}", client_count_);
+                        }
                 }
         }
 
@@ -76,15 +87,33 @@ protected:
                 }
                 if (received > 0) {
                         std::string str(buffer, buffer + received);
-                        U_INFO("Received: {} ", str);
+                        // U_INFO("Received: {} ", str);
+                        socket->SignalWriteEvent.connect(this,
+                                                         &HTTPServer::OnWrite);
+                        OnWrite(socket);
                 }
         }
 
-        void OnWrite(Socket *socket);
+        void OnWrite(Socket *socket)
+        {
+                int res = socket->Send("HTTP/1.1 200 OK\r\nContent-Length: "
+                                       "5\r\n\r\nHello",
+                                       5);
+                if (res > 0) {
+                        socket->Close();
+                }
+        }
+
+        void OnClose(Socket *socket, int err)
+        {
+                U_INFO("OnClose: err: {}", err);
+                socket->Close();
+        }
 
 private:
         IPAddress listen_addr_;
         int listen_port_;
+        int client_count_;
 };
 
 int
@@ -92,14 +121,14 @@ main(int argc, char *argv[])
 {
         std::unique_ptr<HTTPServer> socket_server = std::unique_ptr<HTTPServer>(
                 new HTTPServer(IPAddress("0.0.0.0"), 8080));
-        Socket *accept_socket =
-                socket_server->CreateSocket(AF_INET, SOCK_STREAM);
-        SocketAddress bind_addr(IPAddress("0.0.0.0"), 8080);
-        accept_socket->Bind(bind_addr);
-        accept_socket->Listen(10);
+        if (!socket_server->Initialize()) {
+                U_ERROR("Initialize failed");
+                return -1;
+        }
 
         auto thread =
                 std::unique_ptr<Thread>(new Thread(std::move(socket_server)));
+
         thread->Start();
         thread->Join();
         // thread->PostDelayedTask([] { U_INFO("Hello, world!"); }, 1000);

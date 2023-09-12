@@ -114,7 +114,8 @@ protected:
 Allocator::Deleter::Deleter() : allocator(nullptr) {}
 
 Allocator::Deleter::Deleter(tqcq::Allocator *allocator_, size_t count_)
-    : allocator(allocator_), count(count_)
+    : allocator(allocator_),
+      count(count_)
 {}
 
 template<typename T>
@@ -251,7 +252,7 @@ TrackedAllocator::TrackedAllocator(tqcq::Allocator *allocator)
 TrackedAllocator::Stats
 TrackedAllocator::stats()
 {
-        LockGuard lock(mutex_);
+        LockGuard<Mutex> lock(mutex_);
         return stats_;
 }
 
@@ -259,7 +260,7 @@ Allocation
 TrackedAllocator::Allocate(const Allocation::Request &request)
 {
         {
-                LockGuard lock(mutex_);
+                LockGuard<Mutex> lock(mutex_);
                 auto &usage_stats = stats_.by_usage[int(request.usage)];
                 ++usage_stats.count;
                 usage_stats.bytes += request.size;
@@ -270,7 +271,7 @@ TrackedAllocator::Allocate(const Allocation::Request &request)
 void
 TrackedAllocator::Free(const Allocation &allocation)
 {
-        LockGuard lock(mutex_);
+        LockGuard<Mutex> lock(mutex_);
         auto &usage_stats = stats_.by_usage[int(allocation.request.usage)];
         U_ASSERT(usage_stats.count > 0,
                  "TrackedAllocator detected abnormal free()");

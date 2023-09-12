@@ -7,22 +7,45 @@
 
 #include "mutex.h"
 #include "u-toolbox/base/non_copyable.h"
-#include <mutex>
 
 namespace tqcq {
+
+template<typename T>
+class is_lockable {
+        template<typename>
+        static std::false_type TestLock(...);
+
+        template<typename>
+        static std::false_type TestUnlock(...);
+
+        template<typename U>
+        static auto TestLock(int)
+                -> decltype(std::declval<U>().Lock(), std::true_type());
+
+        template<typename U>
+        static auto TestUnlock(int)
+                -> decltype(std::declval<U>().UnLock(), std::true_type());
+
+public:
+        static constexpr bool value =
+                std::is_same<decltype(TestLock<T>(0)),
+                             decltype(std::true_type())>::value
+                && std::is_same<decltype(TestUnlock<T>(0)),
+                                decltype(std::true_type())>::value;
+};
+
+template<typename MutexType>
 class LockGuard : NonCopyable {
 public:
-        explicit LockGuard(Mutex &mutex) : mutex_(mutex) { mutex_.Lock(); }
+        // static_assert(is_lockable<MutexType>::value,
+        //              "L must be a lockable type");
+
+        explicit LockGuard(MutexType &mutex) : mutex_(mutex) { mutex_.Lock(); }
 
         ~LockGuard() { mutex_.Unlock(); }
 
-        // inner
-        friend class ConditionVariable;
-
 private:
-        pthread_mutex_t *mutex() const { return mutex_.mutex(); }
-
-        Mutex &mutex_;
+        MutexType &mutex_;
 };
 }// namespace tqcq
 

@@ -7,14 +7,17 @@
 
 #include "dispatcher.h"
 #include "socket_server.h"
+#include "u-toolbox/concurrency/recursive_mutex.h"
 #include "u-toolbox/net/sockets/physical_socket.h"
 #include "u-toolbox/third_party/sigslot/sigslot.h"
 #include <array>
 #include <pcap/socket.h>
+#include <unistd.h>
+#include <unordered_map>
+#include <vector>
 
 #ifdef __linux__
 #define U_USE_EPOLL
-#else
 #define U_USE_POLL
 #endif
 
@@ -22,9 +25,7 @@
 #include <sys/epoll.h>
 #endif
 
-#if defined(U_USE_POLL)
 #include <poll.h>
-#endif
 
 namespace tqcq {
 
@@ -63,14 +64,15 @@ private:
 
         static constexpr int kForeverMs = -1;
 
-        uint64_t next_dispatcher_key_ U_GUARDED_BY(mutex_) = 0;
+        uint64_t next_dispatcher_key_ U_GUARDED_BY(recursive_mutex_) = 0;
         std::unordered_map<uint64_t, Dispatcher *>
-                dispatcher_by_key_ U_GUARDED_BY(mutex_);
+                dispatcher_by_key_ U_GUARDED_BY(recursive_mutex_);
         std::unordered_map<Dispatcher *, uint64_t>
-                key_by_dispatcher_ U_GUARDED_BY(mutex_);
+                key_by_dispatcher_ U_GUARDED_BY(recursive_mutex_);
         std::vector<uint64_t> current_dispatcher_keys_;
         Signaler *signal_wakeup_;
-        Mutex mutex_;
+        RecursiveMutex recursive_mutex_;
+        // Mutex mutex_;
         bool flag_wait_;
         bool waiting_ = false;
 };

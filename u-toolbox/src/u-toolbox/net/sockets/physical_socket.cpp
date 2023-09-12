@@ -11,7 +11,7 @@
 #include "u-toolbox/net/socket_address.h"
 #include <netdb.h>
 #include <netinet/tcp.h>
-#include <sys/proc_info.h>
+#include <sys/fcntl.h>
 #include <sys/socket.h>
 
 #define LAST_SYSTEM_ERROR (errno)
@@ -22,11 +22,13 @@ int64_t
 GetSocketRecvTimestamp(int socket)
 {
 #if __linux__
+        /*
         struct timeval tv_ioctl;
         int ret = ioctl(socket, SIOCGSTAMP, &tv_ioctl);
         if (ret) {
                 return -1;
         }
+         */
         return -1;
 #else
         return -1;
@@ -223,14 +225,14 @@ PhysicalSocket::Close()
 int
 PhysicalSocket::GetError() const
 {
-        LockGuard lock(mutex_);
+        LockGuard<Mutex> lock(mutex_);
         return error_;
 }
 
 void
 PhysicalSocket::SetError(int error)
 {
-        LockGuard lock(mutex_);
+        LockGuard<Mutex> lock(mutex_);
         error_ = error;
 }
 

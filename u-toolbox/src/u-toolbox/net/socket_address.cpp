@@ -136,7 +136,7 @@ SocketAddress::HostAsURIString() const
 std::string
 SocketAddress::ToString() const
 {
-        std::stringstream ss(1024);
+        std::stringstream ss;
         ss << HostAsURIString() << ":" << port();
         return ss.str();
 }
@@ -263,8 +263,10 @@ SocketAddress::FromSockAddr(const sockaddr_in &saddr)
 }
 
 static size_t
-ToSockAddrStorageHelper(sockaddr_storage *addr, const IPAddress &ip,
-                        uint16_t port, int scoped_id)
+ToSockAddrStorageHelper(sockaddr_storage *addr,
+                        const IPAddress &ip,
+                        uint16_t port,
+                        int scoped_id)
 {
         memset(addr, 0, sizeof(sockaddr_storage));
         addr->ss_family = static_cast<sa_family_t>(ip.family());

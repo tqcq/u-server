@@ -5,7 +5,7 @@
 #include "signaler.h"
 #include "u-toolbox/concurrency/lock_guard.h"
 #include "u-toolbox/log/u_log.h"
-#include <sys/pipe.h>
+#include <unistd.h>
 
 namespace tqcq {
 Signaler::Signaler(PhysicalSocketServer *ss, bool &flag_to_clear)
@@ -34,7 +34,7 @@ Signaler::~Signaler()
 void
 Signaler::Signal()
 {
-        LockGuard lock(mutex_);
+        LockGuard<Mutex> lock(mutex_);
         if (!f_signaled_) {
                 const uint8_t b[1] = {0};
                 const ssize_t res = write(afd_[1], b, sizeof(b));
@@ -52,7 +52,7 @@ Signaler::GetRequestedEvents()
 void
 Signaler::OnEvent(uint32_t ff, int err)
 {
-        LockGuard lock(mutex_);
+        LockGuard<Mutex> lock(mutex_);
         if (f_signaled_) {
                 uint8_t b[4];
                 const ssize_t res = read(afd_[0], b, sizeof(b));

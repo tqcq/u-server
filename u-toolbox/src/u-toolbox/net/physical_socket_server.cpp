@@ -5,12 +5,24 @@
 #include "physical_socket_server.h"
 #include "dispatcher.h"
 #include "u-toolbox/concurrency/lock_guard.h"
+#include "u-toolbox/concurrency/unlock_guard.h"
 #include "u-toolbox/log/u_log.h"
 #include "u-toolbox/net/dispatchers/signaler.h"
 #include "u-toolbox/net/dispatchers/socket_dispatcher.h"
 #include "u-toolbox/system/time_utils.h"
 
+#if defined(WEBRTC_USE_EPOLL)
+// POLLRDHUP / EPOLLRDHUP are only defined starting with Linux 2.6.17.
+#if !defined(POLLRDHUP)
+#define POLLRDHUP 0x2000
+#endif
+#if !defined(EPOLLRDHUP)
+#define EPOLLRDHUP 0x2000
+#endif
+#endif
+
 namespace tqcq {
+
 class ScopedSetTrue {
 public:
         ScopedSetTrue(bool *value) : value_(value)
@@ -74,7 +86,7 @@ PhysicalSocketServer::WakeUp()
 void
 PhysicalSocketServer::Add(Dispatcher *dispatcher)
 {
-        LockGuard lock(mutex_);
+        LockGuard<RecursiveMutex> lock(recursive_mutex_);
         if (key_by_dispatcher_.count(dispatcher)) {
                 U_WARN("dispatcher already added");
                 return;
@@ -88,7 +100,7 @@ PhysicalSocketServer::Add(Dispatcher *dispatcher)
 void
 PhysicalSocketServer::Remove(Dispatcher *dispatcher)
 {
-        LockGuard lock(mutex_);
+        LockGuard<RecursiveMutex> lock(recursive_mutex_);
         if (!key_by_dispatcher_.count(dispatcher)) {
                 U_WARN("dispatcher not added");
                 return;
@@ -154,7 +166,7 @@ ProcessEvents(Dispatcher *dispatcher,
         }
 }
 
-#if defined(U_USE_EPOLL) || defined(U_USE_POL)
+#if defined(U_USE_EPOLL) || defined(U_USE_POLL)
 static void
 ProcessPollEvents(Dispatcher *dispatcher, const pollfd &pfd)
 {
@@ -190,7 +202,7 @@ PhysicalSocketServer::WaitSelect(int cms_wait, bool process_io)
                 FD_ZERO(&fds_write);
                 int fdmax = -1;
                 {
-                        LockGuard lock(mutex_);
+                        LockGuard<RecursiveMutex> lock(recursive_mutex_);
                         for (auto const &kv : dispatcher_by_key_) {
                                 uint64_t key = kv.first;
                                 Dispatcher *pdispatcher = kv.second;
@@ -227,7 +239,7 @@ PhysicalSocketServer::WaitSelect(int cms_wait, bool process_io)
                         // time out
                         return true;
                 } else {
-                        LockGuard lock(mutex_);
+                        LockGuard<RecursiveMutex> lock(recursive_mutex_);
                         for (uint64_t key : current_dispatcher_keys_) {
                                 if (!dispatcher_by_key_.count(key)) {
                                         continue;

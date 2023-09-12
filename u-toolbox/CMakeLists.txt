@@ -15,7 +15,7 @@ add_library(u-toolbox STATIC ""
         src/u-toolbox/net/sockets/physical_socket.cpp
         src/u-toolbox/net/socket_address.cpp
         src/u-toolbox/net/dispatchers/signaler.cpp
-        )
+        src/u-toolbox/concurrency/recursive_mutex.cpp)
 target_sources(u-toolbox PRIVATE
         "src/u-toolbox/api/task_queue_base.cpp"
         "src/u-toolbox/concurrency/condition_variable.cpp"

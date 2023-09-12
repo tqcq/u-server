@@ -11,7 +11,9 @@
 #include "u-toolbox/third_party/sigslot/sigslot.h"
 #include <pcap/socket.h>
 
+#ifndef SOCKET_ERROR
 #define SOCKET_ERROR (-1);
+#endif
 
 namespace tqcq {
 
@@ -20,7 +22,8 @@ class PhysicalSocketServer;
 
 class PhysicalSocket : public Socket, public sigslot::has_slots<> {
 public:
-        PhysicalSocket(PhysicalSocketServer *ss, SOCKET s = INVALID_SOCKET);
+        explicit PhysicalSocket(PhysicalSocketServer *ss,
+                                SOCKET s = INVALID_SOCKET);
         ~PhysicalSocket() override;
 
         virtual bool Create(int family, int type);

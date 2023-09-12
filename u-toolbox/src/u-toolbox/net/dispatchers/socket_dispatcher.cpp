@@ -88,8 +88,8 @@ SocketDispatcher::IsDescriptorClosed() const
                 case EWOULDBLOCK:
                         return false;
                 default:
-                        U_WARN("recv MSG_PEEK error: {}, {}", errno,
-                               strerror(errno));
+                        // EEK error: {}, {}", errno,
+                        //       strerror(errno));
                         return false;
                 }
         }

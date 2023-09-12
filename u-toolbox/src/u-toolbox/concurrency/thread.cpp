@@ -17,7 +17,10 @@ Thread::Thread(std::unique_ptr<SocketServer> ss) : Thread(std::move(ss), true)
 {}
 
 Thread::Thread(SocketServer *ss, bool do_init)
-    : ss_(ss), delayed_next_num_(1), initialized_(false), destroyed_(false),
+    : ss_(ss),
+      delayed_next_num_(1),
+      initialized_(false),
+      destroyed_(false),
       stop_(0)
 {
         U_ASSERT(ss != nullptr, "SocketServer is nullptr");
@@ -110,7 +113,7 @@ Thread::PostTaskImpl(std::function<void()> task,
         }
 
         {
-                LockGuard lock(mutex_);
+                LockGuard<Mutex> lock(mutex_);
                 messages_.push(std::move(task));
         }
 
@@ -118,7 +121,8 @@ Thread::PostTaskImpl(std::function<void()> task,
 }
 
 void
-Thread::PostDelayedTaskImpl(std::function<void()> task, int delay_ms,
+Thread::PostDelayedTaskImpl(std::function<void()> task,
+                            int delay_ms,
                             const TaskQueueBase::PostDelayedTaskTraits &traits)
 {
         if (IsQuitting()) {
@@ -127,7 +131,7 @@ Thread::PostDelayedTaskImpl(std::function<void()> task, int delay_ms,
 
         int64_t run_time_ms = TimeAfter(delay_ms);
         {
-                LockGuard lock(mutex_);
+                LockGuard<Mutex> lock(mutex_);
                 delayed_messages_.push({.delay_ms = delay_ms,
                                         .run_time_ms = run_time_ms,
                                         .message_number = delayed_next_num_,
@@ -247,7 +251,7 @@ Thread::Get(int cms_wait)
                 // 计算下一次事件来临的时间
                 int64_t cms_delay_next = kForever;
                 {
-                        LockGuard lock(mutex_);
+                        LockGuard<Mutex> lock(mutex_);
                         cms_delay_next = ProcessDelayedMessage(ms_current);
 
                         if (!messages_.empty()) {

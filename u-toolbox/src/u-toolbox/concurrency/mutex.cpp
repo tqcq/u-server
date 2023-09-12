@@ -24,7 +24,7 @@ Mutex::Mutex() { U_CHECK(pthread_mutex_init(&mutex_, nullptr) == 0); }
 Mutex::~Mutex() { U_CHECK(pthread_mutex_destroy(&mutex_) == 0); }
 
 pthread_mutex_t *
-Mutex::mutex() const
+Mutex::mutex()
 {
         return &mutex_;
 }

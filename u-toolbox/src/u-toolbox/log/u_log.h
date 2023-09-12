@@ -33,7 +33,7 @@ class InitLogFormat {
 public:
         InitLogFormat()
         {
-                spdlog::set_pattern("%Y-%m-%d %H:%M:%S.%e %l %t: %v");
+                spdlog::set_pattern("%Y-%m-%d %H:%M:%S.%e %t %l: %v");
         }
 };
 

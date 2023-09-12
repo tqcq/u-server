@@ -12,7 +12,6 @@
 #include <pthread.h>
 
 namespace tqcq {
-class LockGuard;
 
 class ConditionVariable : NonCopyable {
 public:
@@ -24,13 +23,7 @@ public:
         template<typename Predicate>
         void Wait(Mutex &lock, Predicate &&pred)
         {
-                while (!pred()) { pthread_cond_wait(&cond_, lock.mutex()); }
-        }
-
-        template<typename Predicate>
-        void Wait(LockGuard &guard, Predicate &&pred)
-        {
-                while (!pred()) { pthread_cond_wait(&cond_, guard.mutex()); }
+                while (!pred()) { pthread_cond_wait(&cond_, &lock.mutex_); }
         }
 
         void NotifyAll();
