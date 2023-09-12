@@ -6,14 +6,22 @@
 #define HTTP_SERVER_U_TOOLBOX_SRC_U_TOOLBOX_NET_SOCKET_H_
 
 #include "u-toolbox/base/non_copyable.h"
+#include "u-toolbox/net/socket_address.h"
 #include "u-toolbox/third_party/sigslot/sigslot.h"
+#include <stdint.h>
 #ifndef SOCKET
 typedef int SOCKET;
 #endif
 
 namespace tqcq {
 
-class SocketAddress;
+inline bool
+IsBlockingError(int e)
+{
+        return (e == EWOULDBLOCK) || (e == EAGAIN) || (e == EINPROGRESS);
+}
+
+// class SocketAddress;
 
 class Socket : NonCopyable {
 public:
@@ -21,16 +29,19 @@ public:
 
         virtual int Bind(const SocketAddress &addr) = 0;
         virtual int Connect(const SocketAddress &addr) = 0;
-        virtual int Send(const void *pv, size_t cb) = 0;
-        virtual int SendTo(const void *pv, size_t cb,
+        virtual int Send(const void *buffer, size_t length) = 0;
+        virtual int SendTo(const void *buffer,
+                           size_t length,
                            const SocketAddress &addr) = 0;
-        virtual int Recv(void *pv, size_t cb, int64_t *timestamp) = 0;
-        virtual int RecvFrom(void *pv, size_t cb, SocketAddress *paddr,
+        virtual int Recv(void *buffer, size_t length, int64_t *timestamp) = 0;
+        virtual int RecvFrom(void *buffer,
+                             size_t length,
+                             SocketAddress *out_addr,
                              int64_t *timestamp) = 0;
         virtual int Listen(int backlog) = 0;
-        virtual Socket *Accept(SocketAddress *paddr) = 0;
+        virtual Socket *Accept(SocketAddress *out_addr) = 0;
         virtual int Close() = 0;
-        virtual int GetErrror() const = 0;
+        virtual int GetError() const = 0;
         virtual void SetError(int error) = 0;
         inline bool IsBlocking() const;
 

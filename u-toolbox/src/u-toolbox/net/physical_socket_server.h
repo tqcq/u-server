@@ -28,6 +28,9 @@
 
 namespace tqcq {
 
+// u-toolbox/net/dispatchers/signaler.h
+class Signaler;
+
 class PhysicalSocketServer : public SocketServer {
 public:
         static constexpr size_t kNumEpollEvents = 128;
@@ -46,6 +49,8 @@ public:
         void Update(Dispatcher *dispatcher);
 
 private:
+        bool WaitSelect(int cms_wait, bool process_io);
+
 #if defined(USE_EPOLL)
         bool WaitEpoll(int cms_wait, bool process_io);
         std::array<epoll_event, kNumEpollEvents> epoll_events;
@@ -58,22 +63,18 @@ private:
 
         static constexpr int kForeverMs = -1;
 
-        uint64_t next_dispatcher_key_;
+        uint64_t next_dispatcher_key_ U_GUARDED_BY(mutex_) = 0;
+        std::unordered_map<uint64_t, Dispatcher *>
+                dispatcher_by_key_ U_GUARDED_BY(mutex_);
+        std::unordered_map<Dispatcher *, uint64_t>
+                key_by_dispatcher_ U_GUARDED_BY(mutex_);
+        std::vector<uint64_t> current_dispatcher_keys_;
+        Signaler *signal_wakeup_;
+        Mutex mutex_;
         bool flag_wait_;
-        bool waitint_ = false;
+        bool waiting_ = false;
 };
 
-class SocketDispatcher : public Dispatcher, public PhysicalSocket {
-public:
-        explicit SocketDispatcher(PhysicalSocketServer *ss);
-        SocketDispatcher(SOCKET s, PhysicalSocketServer *ss);
-        ~SocketDispatcher() override;
-
-        bool Initialize();
-
-        virtual bool Create(int type);
-        bool Create(int family, int type) override;
-};
 }// namespace tqcq
 
 #endif//HTTP_SERVER_U_TOOLBOX_SRC_U_TOOLBOX_NET_PHYSICAL_SOCKET_SERVER_H_

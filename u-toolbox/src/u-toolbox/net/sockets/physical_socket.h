@@ -11,6 +11,8 @@
 #include "u-toolbox/third_party/sigslot/sigslot.h"
 #include <pcap/socket.h>
 
+#define SOCKET_ERROR (-1);
+
 namespace tqcq {
 
 class SocketServer;
@@ -23,18 +25,21 @@ public:
 
         virtual bool Create(int family, int type);
 
-        int Bind(const SocketAddress &addr) override;
+        int Bind(const SocketAddress &bind_addr) override;
         int Connect(const SocketAddress &addr) override;
-        int Send(const void *pv, size_t cb) override;
-        int SendTo(const void *pv, size_t cb,
+        int Send(const void *buffer, size_t length) override;
+        int SendTo(const void *buffer,
+                   size_t length,
                    const SocketAddress &addr) override;
-        int Recv(void *pv, size_t cb, int64_t *timestamp) override;
-        int RecvFrom(void *pv, size_t cb, SocketAddress *paddr,
+        int Recv(void *buffer, size_t length, int64_t *timestamp) override;
+        int RecvFrom(void *buffer,
+                     size_t length,
+                     SocketAddress *out_addr,
                      int64_t *timestamp) override;
         int Listen(int backlog) override;
-        Socket *Accept(SocketAddress *paddr) override;
+        Socket *Accept(SocketAddress *out_addr) override;
         int Close() override;
-        int GetErrror() const override;
+        int GetError() const override;
         void SetError(int error) override;
         ConnState GetState() const override;
         int GetOption(Option opt, int *value) override;
@@ -44,12 +49,30 @@ public:
 
 protected:
         int DoConnect(const SocketAddress &connect_addr);
-        virtual SOCKET DoAccept(SOCKET socket, sockaddr *addr,
-                                socklen_t *addrlen);
+        virtual SOCKET
+        DoAccept(SOCKET socket, sockaddr *addr, socklen_t *addrlen);
         virtual int DoSend(SOCKET socket, const char *buf, int len, int flags);
-        virtual int DoSendTo(SOCKET socket, const char *buf, int len, int flags,
+        virtual int DoSendTo(SOCKET socket,
+                             const char *buf,
+                             int len,
+                             int flags,
                              const struct sockaddr *dest_addr,
                              socklen_t addrlen);
+
+        int DoReadFromSocket(void *buffer,
+                             size_t length,
+                             SocketAddress *out_addr,
+                             int64_t *timestamp);
+        void UpdateLastError();
+        void MaybeRemapSendError();
+
+        uint8_t enabled_events() const { return enabled_events_; }
+
+        virtual void SetEnableEvents(uint8_t events);
+        virtual void EnableEvents(uint8_t events);
+        virtual void DisableEvents(uint8_t events);
+
+        int TranslateOption(Option opt, int *slevel, int *sopt);
 
         PhysicalSocketServer *ss_;
         SOCKET s_;

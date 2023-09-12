@@ -70,13 +70,16 @@ protected:
         void PostTaskImpl(std::function<void()> task,
                           const PostTaskTraits &traits) override;
 
-        void PostDelayedTaskImpl(std::function<void()> task, int delay_ms,
+        void PostDelayedTaskImpl(std::function<void()> task,
+                                 int delay_ms,
                                  const PostDelayedTaskTraits &traits) override;
 
         void Dispatch(std::function<void()> task);
         bool IsRunning();
         void WakeUpSocketServer();
         void DoInit();
+
+        void DoDestroy();
 
 private:
         static void *PreRun(void *pv);
@@ -96,7 +99,6 @@ private:
          *         otherwise the delay until the next delayed message
          */
         int64_t ProcessDelayedMessage(int64_t cms_now);
-        void DoDestroy();
 
         static const int kSlowDispatchLoggingThreshold = 50;// 50 ms
         std::queue<std::function<void()>> messages_ U_GUARDED_BY(mutex_);

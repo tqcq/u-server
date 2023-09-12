@@ -10,7 +10,12 @@ project(u-toolbox LANGUAGES C CXX VERSION 0.1.0)
 find_package(Threads REQUIRED)
 find_package(spdlog REQUIRED)
 
-add_library(u-toolbox STATIC "" src/u-toolbox/net/dispatcher.h src/u-toolbox/net/dispatchers/socket_dispatcher.cpp src/u-toolbox/net/dispatchers/socket_dispatcher.h src/u-toolbox/net/sockets/physical_socket.cpp src/u-toolbox/net/sockets/physical_socket.h)
+add_library(u-toolbox STATIC ""
+        src/u-toolbox/net/dispatchers/socket_dispatcher.cpp
+        src/u-toolbox/net/sockets/physical_socket.cpp
+        src/u-toolbox/net/socket_address.cpp
+        src/u-toolbox/net/dispatchers/signaler.cpp
+        )
 target_sources(u-toolbox PRIVATE
         "src/u-toolbox/api/task_queue_base.cpp"
         "src/u-toolbox/concurrency/condition_variable.cpp"

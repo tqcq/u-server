@@ -32,6 +32,8 @@ public:
                 u_.ipv4.s_addr = htonl(ip_in_host_byte_order);
         }
 
+        IPAddress(const std::string &ip);
+
         IPAddress(const IPAddress &other) : family_(other.family_)
         {
                 ::memcpy(&u_, &other.u_, sizeof(u_));
@@ -53,6 +55,12 @@ public:
          */
         bool operator==(const IPAddress &other) const;
         bool operator!=(const IPAddress &other) const;
+        /**
+         * @brief ipv4 < ipv6
+         * @param other
+         * @return
+         */
+        bool operator<(const IPAddress &other) const;
 
         int family() const { return family_; }
 
@@ -61,7 +69,7 @@ public:
         // 当前类型地址所占用的字节数
         size_t Size() const;
         // inet_ntop 函数的实现
-        std::string ToString();
+        std::string ToString() const;
 
         IPAddress AsIPv6Address() const;
         uint32_t v4AddressAsHostOrderInteger() const;
@@ -86,6 +94,8 @@ bool IPIsUnspec(const IPAddress &ip);
 bool IPIsAny(const IPAddress &ip);
 bool IPIsLoopback(const IPAddress &ip);
 bool IPIsLinkLocal(const IPAddress &ip);
+bool IPIsPrivate(const IPAddress &ip);
+size_t HashIP(const IPAddress &ip);
 }// namespace tqcq
 
 #endif//HTTP_SERVER_U_TOOLBOX_SRC_U_TOOLBOX_NET_IP_ADDRESS_H_
