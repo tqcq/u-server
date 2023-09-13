@@ -7,6 +7,7 @@
 
 #include "dispatcher.h"
 #include "socket_server.h"
+#include "u-toolbox/base/config.h"
 #include "u-toolbox/concurrency/recursive_mutex.h"
 #include "u-toolbox/net/sockets/physical_socket.h"
 #include "u-toolbox/third_party/sigslot/sigslot.h"
@@ -15,11 +16,6 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
-
-#ifdef __linux__
-#define U_USE_EPOLL
-#define U_USE_POLL
-#endif
 
 #if defined(U_USE_EPOLL)
 #include <sys/epoll.h>
@@ -45,21 +41,23 @@ public:
         bool Wait(int64_t max_wait_duration, bool process_io) override;
         void WakeUp() override;
 
-        void Add(Dispatcher *dispatcher);
-        void Remove(Dispatcher *dispatcher);
-        void Update(Dispatcher *dispatcher);
+        void Add(Dispatcher *pdispatcher);
+        void Remove(Dispatcher *pdispatcher);
+        void Update(Dispatcher *pdispatcher);
 
 private:
         bool WaitSelect(int cms_wait, bool process_io);
 
-#if defined(USE_EPOLL)
+#if defined(U_USE_EPOLL)
+        void AddEpoll(Dispatcher *dispatcher, uint64_t key);
+        void RemoveEpoll(Dispatcher *dispatcher);
+        void UpdateEpoll(Dispatcher *dispatcher, uint64_t key);
+        bool WaitEpoll(int cms_wait);
+        bool WaitPollOneDispatcher(int cms_wait, Dispatcher *dispatcher);
         bool WaitEpoll(int cms_wait, bool process_io);
-        std::array<epoll_event, kNumEpollEvents> epoll_events;
-#endif
 
-#if defined(USE_POLL)
-        bool WaitPoll(int cms_wait, bool process_io);
-        std::array<pollfd, kNumEpollEvents> poll_events;
+        std::array<epoll_event, kNumEpollEvents> epoll_events_;
+        const int epoll_fd_ = INVALID_SOCKET;
 #endif
 
         static constexpr int kForeverMs = -1;

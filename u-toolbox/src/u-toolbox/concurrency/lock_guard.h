@@ -40,9 +40,12 @@ public:
         // static_assert(is_lockable<MutexType>::value,
         //              "L must be a lockable type");
 
-        explicit LockGuard(MutexType &mutex) : mutex_(mutex) { mutex_.Lock(); }
+        inline explicit LockGuard(MutexType &mutex) : mutex_(mutex)
+        {
+                mutex_.Lock();
+        }
 
-        ~LockGuard() { mutex_.Unlock(); }
+        inline ~LockGuard() { mutex_.Unlock(); }
 
 private:
         MutexType &mutex_;

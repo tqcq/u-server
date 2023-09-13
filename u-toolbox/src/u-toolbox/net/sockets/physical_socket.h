@@ -42,6 +42,7 @@ public:
         int Listen(int backlog) override;
         Socket *Accept(SocketAddress *out_addr) override;
         int Close() override;
+        int Shutdown(int flags) override;
         int GetError() const override;
         void SetError(int error) override;
         ConnState GetState() const override;
@@ -71,7 +72,7 @@ protected:
 
         uint8_t enabled_events() const { return enabled_events_; }
 
-        virtual void SetEnableEvents(uint8_t events);
+        virtual void SetEnabledEvents(uint8_t events);
         virtual void EnableEvents(uint8_t events);
         virtual void DisableEvents(uint8_t events);
 

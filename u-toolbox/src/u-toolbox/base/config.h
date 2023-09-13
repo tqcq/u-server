@@ -1,0 +1,13 @@
+//
+// Created by tqcq on 2023/9/13.
+//
+
+#ifndef HTTP_SERVER_U_TOOLBOX_SRC_U_TOOLBOX_BASE_CONFIG_H_
+#define HTTP_SERVER_U_TOOLBOX_SRC_U_TOOLBOX_BASE_CONFIG_H_
+
+#ifdef __linux__
+#define U_USE_EPOLL
+#define U_USE_POLL
+#endif
+
+#endif//HTTP_SERVER_U_TOOLBOX_SRC_U_TOOLBOX_BASE_CONFIG_H_

@@ -5,6 +5,7 @@
 #ifndef HTTP_SERVER_U_TOOLBOX_SRC_U_TOOLBOX_NET_DISPATCHERS_SOCKET_DISPATCHER_H_
 #define HTTP_SERVER_U_TOOLBOX_SRC_U_TOOLBOX_NET_DISPATCHERS_SOCKET_DISPATCHER_H_
 
+#include "u-toolbox/base/config.h"
 #include "u-toolbox/net/dispatcher.h"
 #include "u-toolbox/net/sockets/physical_socket.h"
 
@@ -36,6 +37,22 @@ public:
         void OnEvent(uint32_t ff, int err) override;
 
         int Close() override;
+
+#if defined(U_USE_EPOLL)
+protected:
+        void StartBatchedEventUpdates();
+        void FinishBatchedEventUpdates();
+
+        void SetEnabledEvents(uint8_t events) override;
+        void EnableEvents(uint8_t events) override;
+        void DisableEvents(uint8_t events) override;
+#endif
+
+#if defined(U_USE_EPOLL)
+private:
+        void MayBeUpdateDispatcher(uint8_t old_events);
+        int saved_enabled_events_ = -1;
+#endif
 };
 }// namespace tqcq
 

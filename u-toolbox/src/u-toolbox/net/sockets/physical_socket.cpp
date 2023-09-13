@@ -41,7 +41,7 @@ PhysicalSocket::PhysicalSocket(PhysicalSocketServer *ss, int s)
       error_(0),
       state_((s == INVALID_SOCKET) ? CS_CLOSED : CS_CONNECTED)
 {
-        SetEnableEvents(DE_READ | DE_WRITE);
+        SetEnabledEvents(DE_READ | DE_WRITE);
 
         int type = SOCK_STREAM;
         socklen_t len = sizeof(type);
@@ -60,7 +60,7 @@ PhysicalSocket::Create(int family, int type)
         family_ = family;
         UpdateLastError();
         if (udp_) {
-                SetEnableEvents(DE_READ | DE_WRITE);
+                SetEnabledEvents(DE_READ | DE_WRITE);
         }
         return s_ != INVALID_SOCKET;
 }
@@ -218,8 +218,14 @@ PhysicalSocket::Close()
         UpdateLastError();
         s_ = INVALID_SOCKET;
         state_ = CS_CLOSED;
-        SetEnableEvents(0);
+        SetEnabledEvents(0);
         return err;
+}
+
+int
+PhysicalSocket::Shutdown(int flags)
+{
+        return shutdown(s_, flags);
 }
 
 int
@@ -376,7 +382,7 @@ PhysicalSocket::MaybeRemapSendError()
 }
 
 void
-PhysicalSocket::SetEnableEvents(uint8_t events)
+PhysicalSocket::SetEnabledEvents(uint8_t events)
 {
         enabled_events_ = events;
 }
@@ -417,6 +423,12 @@ PhysicalSocket::TranslateOption(Socket::Option opt, int *slevel, int *sopt)
                 *slevel = SOL_SOCKET;
                 *sopt = TCP_NODELAY;
                 break;
+        case OPT_REUSEADDR:
+                *slevel = SOL_SOCKET;
+                *sopt = SO_REUSEADDR;
+        case OPT_REUSEPORT:
+                *slevel = SOL_SOCKET;
+                *sopt = SO_REUSEPORT;
         case OPT_DSCP:
                 if (family_ == AF_INET6) {
                         *slevel = IPPROTO_IPV6;

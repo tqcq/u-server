@@ -5,6 +5,7 @@
 #ifndef HTTP_SERVER_U_TOOLBOX_LOG_U_LOG_H_
 #define HTTP_SERVER_U_TOOLBOX_LOG_U_LOG_H_
 
+#include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/spdlog.h>
 
 namespace tqcq {
@@ -20,11 +21,14 @@ class ULog {
         (condition) ? static_cast<void>(0)                                     \
                     : U_FATAL("Check failed: " #condition ". ")
 
-#define U_ASSERT(condition, error_msg)                                         \
+#define U_ASSERT(condition, error_msg, ...)                                    \
+        U_ASSERT_IMPL(condition, error_msg, ##__VA_ARGS__)
+
+#define U_ASSERT_IMPL(condition, error_msg, ...)                               \
         do {                                                                   \
                 if (!(condition)) {                                            \
                         U_FATAL("assert failed. [" #condition "] {}",          \
-                                error_msg);                                    \
+                                error_msg, ##__VA_ARGS__);                     \
                 }                                                              \
         } while (0)
 };

@@ -41,6 +41,7 @@ public:
         virtual int Listen(int backlog) = 0;
         virtual Socket *Accept(SocketAddress *out_addr) = 0;
         virtual int Close() = 0;
+        virtual int Shutdown(int flags) = 0;
         virtual int GetError() const = 0;
         virtual void SetError(int error) = 0;
         inline bool IsBlocking() const;
@@ -59,6 +60,8 @@ public:
                 OPT_SNDBUF,
                 OPT_NODELAY,
                 OPT_IPV6_V6ONLY,
+                OPT_REUSEADDR,
+                OPT_REUSEPORT,
                 OPT_DSCP,
                 OPT_RTP_SENDTIME_EXTN_ID,
         };

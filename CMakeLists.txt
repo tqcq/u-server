@@ -13,3 +13,5 @@ add_subdirectory("third_party/marl")
 target_link_libraries(http_server PRIVATE
         u-toolbox
         marl)
+
+install(FILES "index.html" DESTINATION .)

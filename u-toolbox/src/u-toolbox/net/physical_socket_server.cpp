@@ -10,6 +10,7 @@
 #include "u-toolbox/net/dispatchers/signaler.h"
 #include "u-toolbox/net/dispatchers/socket_dispatcher.h"
 #include "u-toolbox/system/time_utils.h"
+#include <sys/socket.h>
 
 #if defined(WEBRTC_USE_EPOLL)
 // POLLRDHUP / EPOLLRDHUP are only defined starting with Linux 2.6.17.
@@ -37,12 +38,30 @@ private:
         bool *value_;
 };
 
-PhysicalSocketServer::PhysicalSocketServer() : flag_wait_(false)
+PhysicalSocketServer::PhysicalSocketServer()
+    :
+#if defined(U_USE_EPOLL)
+      epoll_fd_(epoll_create(FD_SETSIZE)),
+#endif
+      flag_wait_(false)
 {
+#if defined(U_USE_EPOLL)
+        if (epoll_fd_ == INVALID_SOCKET) {
+                U_ERROR("epoll_create failed: {}, {}", errno, strerror(errno));
+        }
+#endif
         signal_wakeup_ = new Signaler(this, flag_wait_);
 }
 
-PhysicalSocketServer::~PhysicalSocketServer() { delete signal_wakeup_; }
+PhysicalSocketServer::~PhysicalSocketServer()
+{
+        delete signal_wakeup_;
+#if defined(U_USE_EPOLL)
+        if (epoll_fd_ != INVALID_SOCKET) {
+                close(epoll_fd_);
+        }
+#endif
+}
 
 Socket *
 PhysicalSocketServer::CreateSocket(int family, int type)
@@ -74,6 +93,16 @@ PhysicalSocketServer::Wait(int64_t max_wait_duration, bool process_io)
         ScopedSetTrue s(&waiting_);
         const int64_t cms_wait =
                 max_wait_duration == kForever ? kForeverMs : max_wait_duration;
+
+#if defined(U_USE_EPOLL)
+        if (!process_io) {
+                return WaitPollOneDispatcher(cms_wait, signal_wakeup_);
+        } else if (epoll_fd_ != INVALID_SOCKET) {
+                return WaitEpoll(cms_wait);
+        }
+
+        return false;
+#endif
         return WaitSelect(cms_wait, process_io);
 }
 
@@ -84,36 +113,60 @@ PhysicalSocketServer::WakeUp()
 }
 
 void
-PhysicalSocketServer::Add(Dispatcher *dispatcher)
+PhysicalSocketServer::Add(Dispatcher *pdispatcher)
 {
         LockGuard<RecursiveMutex> lock(recursive_mutex_);
-        if (key_by_dispatcher_.count(dispatcher)) {
+        if (key_by_dispatcher_.count(pdispatcher)) {
                 U_WARN("dispatcher already added");
                 return;
         }
 
         uint64_t key = next_dispatcher_key_++;
-        dispatcher_by_key_.emplace(key, dispatcher);
-        key_by_dispatcher_.emplace(dispatcher, key);
+        dispatcher_by_key_.emplace(key, pdispatcher);
+        key_by_dispatcher_.emplace(pdispatcher, key);
+
+#if defined(U_USE_EPOLL)
+        if (epoll_fd_ != INVALID_SOCKET) {
+                AddEpoll(pdispatcher, key);
+        }
+#endif
 }
 
 void
-PhysicalSocketServer::Remove(Dispatcher *dispatcher)
+PhysicalSocketServer::Remove(Dispatcher *pdispatcher)
 {
         LockGuard<RecursiveMutex> lock(recursive_mutex_);
-        if (!key_by_dispatcher_.count(dispatcher)) {
+        if (!key_by_dispatcher_.count(pdispatcher)) {
                 U_WARN("dispatcher not added");
                 return;
         }
 
-        uint64_t key = key_by_dispatcher_.at(dispatcher);
-        key_by_dispatcher_.erase(dispatcher);
+        uint64_t key = key_by_dispatcher_.at(pdispatcher);
+        key_by_dispatcher_.erase(pdispatcher);
         dispatcher_by_key_.erase(key);
+#if defined(U_USE_EPOLL)
+        if (epoll_fd_ != INVALID_SOCKET) {
+                RemoveEpoll(pdispatcher);
+        }
+#endif
 }
 
 void
 PhysicalSocketServer::Update(Dispatcher *dispatcher)
-{}
+{
+#if defined(U_USE_EPOLL)
+        if (epoll_fd_ == INVALID_SOCKET) {
+                return;
+        }
+
+        LockGuard<RecursiveMutex> lock(recursive_mutex_);
+        if (!key_by_dispatcher_.count(dispatcher)) {
+                return;
+        }
+
+        UpdateEpoll(dispatcher, key_by_dispatcher_.at(dispatcher));
+#endif
+}
 
 static void
 ProcessEvents(Dispatcher *dispatcher,
@@ -265,5 +318,220 @@ PhysicalSocketServer::WaitSelect(int cms_wait, bool process_io)
         }
         return true;
 }
+
+#if defined(U_USE_EPOLL)
+inline static int
+GetEpollEvents(uint32_t ff)
+{
+        int events = 0;
+        if (ff & (DE_READ | DE_ACCEPT)) {
+                events |= EPOLLIN;
+        }
+
+        if (ff & (DE_WRITE | DE_CONNECT)) {
+                events |= EPOLLOUT;
+        }
+        return events;
+}
+
+void
+PhysicalSocketServer::AddEpoll(Dispatcher *dispatcher, uint64_t key)
+{
+        U_ASSERT(epoll_fd_ != INVALID_SOCKET, "epoll_fd_ is invalid");
+        int fd = dispatcher->GetDescriptor();
+        U_ASSERT(fd != INVALID_SOCKET, "fd is invalid");
+        if (fd == INVALID_SOCKET) {
+                return;
+        }
+
+        struct epoll_event event = {0};
+        event.events = GetEpollEvents(dispatcher->GetRequestedEvents());
+        if (event.events == 0u) {
+                return;
+        }
+
+        event.data.u64 = key;
+        int err = epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &event);
+        U_ASSERT(err == 0, "epoll_ctl add failed: {}, {}", errno,
+                 strerror(errno));
+}
+
+void
+PhysicalSocketServer::RemoveEpoll(Dispatcher *dispatcher)
+{
+        U_ASSERT(epoll_fd_ != INVALID_SOCKET, "epoll_fd_ is invalid");
+        int fd = dispatcher->GetDescriptor();
+        U_ASSERT(fd != INVALID_SOCKET, "fd is invalid");
+        if (fd == INVALID_SOCKET) {
+                return;
+        }
+
+        struct epoll_event event = {0};
+        int err = epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, &event);
+        U_ASSERT(err == 0 || errno == ENOENT, "assert epoll_ctl del: {}, {}",
+                 errno, strerror(errno));
+        if (err == -1 && errno != ENOENT) {
+                U_ERROR("epoll_ctl del failed: {}, {}", errno, strerror(errno));
+        }
+}
+
+void
+PhysicalSocketServer::UpdateEpoll(Dispatcher *dispatcher, uint64_t key)
+{
+        U_ASSERT(epoll_fd_ != INVALID_SOCKET, "epoll_fd_ is invalid");
+        int fd = dispatcher->GetDescriptor();
+        U_ASSERT(fd != INVALID_SOCKET, "fd is invalid");
+        if (fd == INVALID_SOCKET) {
+                return;
+        }
+
+        struct epoll_event event = {0};
+        event.events = GetEpollEvents(dispatcher->GetRequestedEvents());
+        event.data.u64 = key;
+
+        if (event.events == 0u) {
+                epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &event);
+        } else {
+                int err = epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &event);
+                U_ASSERT(err == 0, "epoll_ctl mod failed: {}, {}", errno,
+                         strerror(errno));
+                if (err == -1) {
+                        if (errno == ENOENT) {
+                                epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &event);
+                                if (err == -1) {
+                                        U_ERROR("epoll_ctl add failed: {}, {}",
+                                                errno, strerror(errno));
+                                }
+                        } else {
+                                U_ERROR("epoll_ctl mod failed: {}, {}", errno,
+                                        strerror(errno));
+                        }
+                }
+        }
+}
+
+bool
+PhysicalSocketServer::WaitEpoll(int cms_wait)
+{
+        int64_t ms_wait = -1;
+        int64_t ms_stop = -1;
+
+        if (cms_wait != kForeverMs) {
+                ms_wait = cms_wait;
+                ms_stop = TimeAfter(cms_wait);
+        }
+
+        flag_wait_ = true;
+        while (flag_wait_) {
+                int n = epoll_wait(epoll_fd_, epoll_events_.data(),
+                                   epoll_events_.size(),
+                                   static_cast<int>(ms_wait));
+
+                if (n < 0) {
+                        if (errno != EINTR) {
+                                U_ERROR("epoll_wait failed: {}, {}", errno,
+                                        strerror(errno));
+                                return false;
+                        }
+                } else if (n == 0) {
+                        // timeout, do nothing
+                        return true;
+                } else {
+                        LockGuard<RecursiveMutex> lock(recursive_mutex_);
+                        for (int i = 0; i < n; ++i) {
+                                const epoll_event &event = epoll_events_[i];
+                                uint64_t key = event.data.u64;
+                                if (!dispatcher_by_key_.count(key)) {
+                                        continue;
+                                }
+
+                                Dispatcher *pdispatcher =
+                                        dispatcher_by_key_.at(key);
+
+                                bool readable =
+                                        (event.events & (EPOLLIN | EPOLLPRI));
+                                bool writable = (event.events & EPOLLOUT);
+                                bool error =
+                                        (event.events
+                                         & (EPOLLRDHUP | EPOLLERR | EPOLLHUP));
+
+                                ProcessEvents(pdispatcher, readable, writable,
+                                              error, error);
+                        }
+                }
+
+                if (cms_wait != kForeverMs) {
+                        ms_wait = TimeDiff(ms_stop, TimeMicros());
+                        if (ms_wait <= 0) {
+                                return true;
+                        }
+                }
+        }
+
+        return true;
+}
+
+bool
+PhysicalSocketServer::WaitPollOneDispatcher(int cms_wait,
+                                            Dispatcher *dispatcher)
+{
+        int64_t ms_wait = -1;
+        int64_t ms_stop = -1;
+        if (cms_wait != kForeverMs) {
+                ms_wait = cms_wait;
+                ms_stop = TimeAfter(cms_wait);
+        }
+
+        flag_wait_ = true;
+        const int fd = dispatcher->GetDescriptor();
+
+        while (flag_wait_) {
+                pollfd fds{
+                        .fd = dispatcher->GetDescriptor(),
+                        .events = 0,
+                        .revents = 0,
+                };
+                uint32_t ff = dispatcher->GetRequestedEvents();
+                if (ff & (DE_READ | DE_ACCEPT)) {
+                        fds.events |= POLLIN;
+                }
+
+                if (ff & (DE_WRITE | DE_CONNECT)) {
+                        fds.events |= POLLOUT;
+                }
+
+                int n = poll(&fds, 1, static_cast<int>(ms_wait));
+                if (n < 0) {
+                        if (errno != EINTR) {
+                                U_ERROR("poll failed: {}, {}", errno,
+                                        strerror(errno));
+                                return false;
+                        }
+                } else if (n == 0) {
+                        // timeout, do nothing
+                        return true;
+                } else {
+                        U_ASSERT(n == 1, "poll return value is not 1");
+                        U_ASSERT(fds.fd == fd, "poll return fd is not equal");
+                        ProcessPollEvents(dispatcher, fds);
+                }
+
+                if (cms_wait != kForeverMs) {
+                        ms_wait = TimeDiff(ms_stop, TimeMicros());
+                        if (ms_wait < 0) {
+                                return true;
+                        }
+                }
+        }
+
+        return true;
+}
+
+bool
+PhysicalSocketServer::WaitEpoll(int cms_wait, bool process_io)
+{
+        return false;
+}
+#endif
 
 }// namespace tqcq
