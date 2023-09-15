@@ -526,12 +526,6 @@ PhysicalSocketServer::WaitPollOneDispatcher(int cms_wait,
 
         return true;
 }
-
-bool
-PhysicalSocketServer::WaitEpoll(int cms_wait, bool process_io)
-{
-        return false;
-}
 #endif
 
 }// namespace tqcq

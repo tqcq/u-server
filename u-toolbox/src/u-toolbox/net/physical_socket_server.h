@@ -54,7 +54,6 @@ private:
         void UpdateEpoll(Dispatcher *dispatcher, uint64_t key);
         bool WaitEpoll(int cms_wait);
         bool WaitPollOneDispatcher(int cms_wait, Dispatcher *dispatcher);
-        bool WaitEpoll(int cms_wait, bool process_io);
 
         std::array<epoll_event, kNumEpollEvents> epoll_events_;
         const int epoll_fd_ = INVALID_SOCKET;
